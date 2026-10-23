@@ -43,6 +43,6 @@ const modules = [
 const tracks = [
   {id:'supervisor',eyebrow:'TRACK 01',title:'슈퍼바이징 직무 교육',description:'가맹점의 운영 품질을 높이고 점주의 성장을 돕는 현장 중심 학습',icon:'◈',color:'green',status:'학습 가능'},
   {id:'development',eyebrow:'TRACK 02',title:'점포개발 직무 교육',description:'입지 발굴부터 계약, 오픈 준비까지의 흐름을 배울 예정입니다.',icon:'⌖',color:'sand',status:'준비 중'},
-  {id:'qsc',eyebrow:'SIMULATION 01',title:'QSC 모의 점검 시뮬레이션',description:'가상의 점포를 점검하고 개선 우선순위를 정하는 실습입니다.',icon:'☑',color:'blue',status:'준비 중'},
+  {id:'qsc',eyebrow:'SIMULATION 01',title:'QSC 모의 점검 시뮬레이션',description:'가상 점포를 직접 점검하는 실습 앱으로 이동합니다.',icon:'☑',color:'blue',status:'실습 가능',url:'https://qsc-field-simulator-20261022.earthyeagle4.chatgpt.site/'},
   {id:'market',eyebrow:'SIMULATION 02',title:'모의 상권분석 시뮬레이션',description:'고객 동선과 경쟁 환경을 읽고 입지를 평가하는 실습입니다.',icon:'◎',color:'purple',status:'준비 중'}
 ];
