@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#102a2a">
+  <meta name="description" content="Yoohastree Franchise Training — 프랜차이즈 실무자를 위한 현장 중심 교육">
+  <title>Yoohastree Franchise Training</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+KR:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="주 메뉴">
+      <a class="brand" href="#home" aria-label="Yoohastree Franchise Training 홈">
+        <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
+        <span class="brand-copy"><strong>YOOHASTREE</strong><small>FRANCHISE TRAINING</small></span>
+      </a>
+      <div class="side-label">LEARNING SPACE</div>
+      <nav class="side-nav">
+        <button class="nav-link active" data-view="home"><span class="nav-icon">▦</span> 대시보드</button>
+        <button class="nav-link" data-view="supervisor"><span class="nav-icon">◈</span> 슈퍼바이징 직무 교육</button>
+        <button class="nav-link" data-view="development"><span class="nav-icon">⌖</span> 점포개발 직무 교육</button>
+        <button class="nav-link" data-view="qsc"><span class="nav-icon">☑</span> QSC 모의 점검</button>
+        <button class="nav-link" data-view="market"><span class="nav-icon">◉</span> 모의 상권분석</button>
+      </nav>
+      <div class="side-bottom">
+        <div class="access-badge"><span class="access-dot"></span><div><strong>승인된 학습자 전용</strong><small>이메일 계정으로 접근</small></div></div>
+        <p>현장을 이해하고,<br>성장을 설계합니다.</p>
+        <small>© 2026 Yoohastree</small>
+      </div>
+    </aside>
+
+    <div class="main-wrap">
+      <header class="topbar">
+        <button class="mobile-menu" id="menuButton" aria-label="메뉴 열기" aria-expanded="false">☰</button>
+        <div class="breadcrumb">YOOHASTREE <span>/</span> <span id="breadcrumbCurrent">대시보드</span></div>
+        <div class="top-actions"><span class="today" id="today"></span><span class="avatar" aria-label="학습자">Y</span></div>
+      </header>
+
+      <main id="app" tabindex="-1"></main>
+    </div>
+  </div>
+
+  <dialog id="lessonDialog" class="lesson-dialog" aria-labelledby="lessonTitle">
+    <div class="dialog-layout">
+      <div class="dialog-top"><span class="dialog-kicker" id="lessonModule"></span><button id="closeDialog" class="icon-button" aria-label="닫기">×</button></div>
+      <div class="dialog-scroll" id="lessonBody"></div>
+      <div class="dialog-footer"><button id="completeLesson" class="primary-button">학습 완료로 표시 <span>↗</span></button></div>
+    </div>
+  </dialog>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="./data.js"></script>
+  <script src="./app.js"></script>
+</body>
+</html>
