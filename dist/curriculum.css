@@ -1,0 +1,16 @@
+.course-number{flex:none;font-size:10px;font-weight:800;letter-spacing:.08em;color:#82a078;min-width:21px}
+.objective-box{background:#eff5eb;border:1px solid #e2eddf;border-radius:10px;padding:17px 19px;margin-top:20px}
+.objective-box span{display:block;color:#5d8b61;font-size:10px;font-weight:800;letter-spacing:.08em;margin-bottom:7px}
+.objective-box p{font-size:13px;line-height:1.75;color:#3f5e49;margin:0}
+.learning-point{align-items:flex-start}
+.learning-point>span{flex:none;min-width:18px}
+.learning-point>div{min-width:0}
+.learning-point strong{display:block;font-size:12px;color:#2f5241;margin-bottom:5px}
+.learning-point p{font-size:11px;line-height:1.75}
+.forms-section{margin-top:28px}
+.forms-section h3{margin-bottom:12px}
+.form-list{display:flex;flex-wrap:wrap;gap:7px}
+.form-list span{padding:8px 11px;border:1px solid #dce8dd;border-radius:7px;background:#f8faf7;color:#506b56;font-size:11px;font-weight:600}
+.simulation-inline{display:inline-block;margin-top:12px;color:#326b53;font-size:11px;font-weight:800;text-decoration:underline;text-underline-offset:3px}
+.course-note{font-size:11px;line-height:1.7;color:#7b8065;background:#faf8e8;border-radius:8px;padding:11px 13px;margin:22px 0 0}
+@media(max-width:760px){.course-number{font-size:9px;min-width:15px}.lesson-row{gap:8px}.lesson-time{display:none}.objective-box{padding:14px 15px}.learning-point strong{font-size:11px}}
