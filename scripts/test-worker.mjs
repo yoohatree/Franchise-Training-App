@@ -52,3 +52,29 @@ assert.equal(result.status, 303);
 assert.equal((await send('/lesson-content.js', { headers: staff })).status, 403);
 assert.equal((await send('/styles.css', { headers: owner })).status, 200);
 console.log('Approval request, owner approval, asset protection, and revocation: OK');
+
+const clerkBucket = new Bucket();
+await clerkBucket.put('requests/legacy-staff.json', JSON.stringify({ id: 'legacy-staff', email: 'employee@example.com', status: 'approved', requestedAt: '2026-10-22T00:00:00.000Z' }));
+const clerkClient = {
+  async authenticateRequest(request) {
+    const id = request.headers.get('x-test-clerk-id');
+    return { isAuthenticated: Boolean(id), headers: new Headers(), toAuth: () => ({ userId: id }) };
+  },
+  users: {
+    async getUser(id) {
+      const email = id === 'owner' ? 'yoohatree@gmail.com' : 'employee@example.com';
+      return { primaryEmailAddressId: 'email-1', emailAddresses: [{ id: 'email-1', emailAddress: email, verification: { status: id === 'unverified' ? 'unverified' : 'verified' } }] };
+    }
+  }
+};
+const clerkEnv = { BUCKET: clerkBucket, AUTH_PROVIDER: 'clerk', CLERK_PUBLISHABLE_KEY: 'pk_test_YWJjJA', CLERK_SECRET_KEY: 'sk_test_example', __clerkClient: clerkClient };
+const sendClerk = (path, { method = 'GET', headers = {}, body } = {}) => worker.fetch(new Request(`${origin}${path}`, { method, headers, body }), clerkEnv);
+assert.match(await (await sendClerk('/')).text(), /clerk-sign-in/);
+assert.equal((await sendClerk('/lesson-content.js', { headers: staff })).status, 403);
+assert.equal((await sendClerk('/lesson-content.js', { headers: { 'x-test-clerk-id': 'unverified' } })).status, 403);
+assert.equal((await sendClerk('/lesson-content.js', { headers: { 'x-test-clerk-id': 'staff' } })).status, 200);
+assert.equal((await sendClerk('/admin', { headers: { 'x-test-clerk-id': 'staff' } })).status, 403);
+assert.match(await (await sendClerk('/admin', { headers: { 'x-test-clerk-id': 'owner' } })).text(), /employee@example.com/);
+await sendClerk('/api/admin/status', { method: 'POST', headers: { origin, 'x-test-clerk-id': 'owner' }, body: new URLSearchParams({ id: 'legacy-staff', status: 'rejected' }) });
+assert.equal((await sendClerk('/lesson-content.js', { headers: { 'x-test-clerk-id': 'staff' } })).status, 403);
+console.log('Clerk verified identity, legacy approval lookup, owner access, and revocation: OK');

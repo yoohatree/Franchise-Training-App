@@ -1,8 +1,10 @@
 /* __EMBED_ASSETS__ */
+import { createClerkClient } from '@clerk/backend';
 
 const OWNER_EMAIL = 'yoohatree@gmail.com';
 const ASSET_NAMES = new Set(Object.keys(embeddedAssets));
 const NO_STORE = { 'cache-control': 'private, no-store, max-age=0', 'x-content-type-options': 'nosniff' };
+const legacyRecordIdsByEmail = new Map();
 
 function html(value) {
   return String(value ?? '').replace(/[&<>"']/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
@@ -16,11 +18,59 @@ function redirect(path) {
   return new Response(null, { status: 303, headers: { ...NO_STORE, location: path } });
 }
 
-function identity(request) {
+function legacyIdentity(request) {
   const id = request.headers.get('oai-authenticated-user-id');
   const email = request.headers.get('oai-authenticated-user-email');
   if (!id || !email) return null;
   return { id, email, isOwner: email.toLowerCase() === OWNER_EMAIL };
+}
+
+function clerkEnabled(env) {
+  return env.AUTH_PROVIDER === 'clerk';
+}
+
+function clerkPublishableKey(env) {
+  return env.CLERK_PUBLISHABLE_KEY || env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+}
+
+function clerkFrontendDomain(publishableKey) {
+  const encoded = String(publishableKey).replace(/^pk_(test|live)_/, '');
+  try {
+    const domain = atob(encoded).replace(/\$$/, '');
+    return /^[a-z0-9.-]+$/i.test(domain) ? domain : null;
+  } catch {
+    return null;
+  }
+}
+
+async function authenticate(request, env) {
+  if (!clerkEnabled(env)) return { user: legacyIdentity(request) };
+  if (!clerkPublishableKey(env) || !env.CLERK_SECRET_KEY) {
+    return { response: response('Clerk 설정이 완료되지 않았습니다.', 503, 'text/plain; charset=utf-8') };
+  }
+  try {
+    const client = env.__clerkClient || createClerkClient({
+      secretKey: env.CLERK_SECRET_KEY,
+      publishableKey: clerkPublishableKey(env)
+    });
+    const state = await client.authenticateRequest(request, {
+      authorizedParties: [new URL(request.url).origin],
+      acceptsToken: 'session_token'
+    });
+    const location = state.headers?.get('location');
+    if (location) return { response: new Response(null, { status: 307, headers: state.headers }) };
+    if (!state.isAuthenticated) return { user: null };
+    const clerkId = state.toAuth().userId;
+    if (!clerkId) return { user: null };
+    const account = await client.users.getUser(clerkId);
+    const primary = account.emailAddresses?.find(item => item.id === account.primaryEmailAddressId);
+    if (!primary || primary.verification?.status !== 'verified') return { user: null };
+    const email = primary.emailAddress.toLowerCase();
+    return { user: { id: `clerk:${clerkId}`, email, isOwner: email === OWNER_EMAIL } };
+  } catch (error) {
+    console.error('Clerk authentication failed', error);
+    return { response: response('로그인 서비스를 확인할 수 없습니다. 잠시 후 다시 시도해 주세요.', 503, 'text/plain; charset=utf-8') };
+  }
 }
 
 function keyFor(id) {
@@ -31,6 +81,19 @@ async function recordFor(bucket, id) {
   const object = await bucket.get(keyFor(id));
   if (!object) return null;
   try { return await object.json(); } catch { return null; }
+}
+
+async function recordForUser(bucket, user) {
+  const direct = await recordFor(bucket, user.id);
+  if (direct || !user.id.startsWith('clerk:')) return direct;
+  const email = user.email.toLowerCase();
+  let legacyId = legacyRecordIdsByEmail.get(email);
+  if (legacyId === undefined) {
+    const match = (await allRecords(bucket)).find(row => row.email.toLowerCase() === email && !row.id.startsWith('clerk:'));
+    legacyId = match?.id;
+    if (legacyId) legacyRecordIdsByEmail.set(email, legacyId);
+  }
+  return legacyId ? recordFor(bucket, legacyId) : null;
 }
 
 async function saveRecord(bucket, record) {
@@ -48,9 +111,26 @@ function shell(title, body, { refresh = false } = {}) {
   </style></head><body><header><strong>YOOHASTREE</strong><span>FRANCHISE TRAINING</span></header><main>${body}</main></body></html>`;
 }
 
-function signInPage(returnTo) {
+function clerkScripts(env) {
+  const key = clerkPublishableKey(env);
+  const domain = clerkFrontendDomain(key);
+  if (!domain) return '';
+  return `<script defer crossorigin="anonymous" src="https://${domain}/npm/@clerk/ui@1/dist/ui.browser.js"></script><script defer crossorigin="anonymous" data-clerk-publishable-key="${html(key)}" src="https://${domain}/npm/@clerk/clerk-js@6/dist/clerk.browser.js"></script>`;
+}
+
+function signInPage(returnTo, env) {
+  if (clerkEnabled(env)) {
+    const script = `<script>window.addEventListener('load',async()=>{try{await Clerk.load({ui:{ClerkUI:window.__internal_ClerkUICtor}});if(Clerk.isSignedIn){location.replace(${JSON.stringify(returnTo)});return}Clerk.mountSignIn(document.getElementById('clerk-sign-in'),{routing:'hash',forceRedirectUrl:${JSON.stringify(returnTo)},signUpForceRedirectUrl:${JSON.stringify(returnTo)}})}catch(error){document.getElementById('clerk-sign-in').textContent='로그인 화면을 불러오지 못했습니다. 페이지를 새로고침해 주세요.'}})</script>`;
+    return shell('직원 로그인', `<section class="card"><div class="eyebrow">STAFF ACCESS</div><h1>프랜차이즈 교육 로그인</h1><p>본인 이메일로 로그인하면 접속 승인을 요청할 수 있습니다. 승인된 계정에만 교육 자료가 제공됩니다.</p><div id="clerk-sign-in" aria-live="polite">로그인 화면을 불러오는 중입니다…</div><div class="notice">승인 요청에 사용한 이메일과 이후 로그인할 이메일은 같아야 합니다.</div></section>${clerkScripts(env)}${script}`);
+  }
   const path = `/signin-with-chatgpt?return_to=${encodeURIComponent(returnTo)}`;
   return shell('직원 로그인', `<section class="card"><div class="eyebrow">STAFF ACCESS</div><h1>프랜차이즈 교육에 참여하세요</h1><p>직원 본인의 이메일로 로그인한 뒤 접속 승인을 요청할 수 있습니다. 교육 자료는 대표님의 승인을 받은 계정에만 제공됩니다.</p><a class="button" href="${path}" target="_top">로그인하고 승인 요청하기 ↗</a><div class="notice">승인 요청에 사용한 이메일과 이후 로그인할 이메일은 같아야 합니다.</div></section>`);
+}
+
+function signOutPage(env) {
+  if (!clerkEnabled(env)) return redirect('/signout-with-chatgpt?return_to=%2F');
+  const script = `<script>window.addEventListener('load',async()=>{try{await Clerk.load();await Clerk.signOut()}finally{location.replace('/')}})</script>`;
+  return shell('로그아웃', `<section class="card"><h1>로그아웃 중입니다</h1><p>잠시만 기다려 주세요.</p></section>${clerkScripts(env)}${script}`);
 }
 
 function requestPage(user, record) {
@@ -64,12 +144,12 @@ function requestPage(user, record) {
   const action = state === 'pending'
     ? '<a class="button secondary" href="/">승인 상태 새로고침 ↻</a>'
     : '<form method="post" action="/api/request"><button type="submit">접속 승인 요청하기 ↗</button></form>';
-  return shell(title, `<section class="card"><div class="eyebrow">ACCESS REQUEST</div><h1>${title}</h1><p>${lead}</p><div class="notice">요청 계정: <strong>${html(user.email)}</strong><br>승인 전에는 교육 내용에 접근할 수 없습니다.</div>${action}</section>`, { refresh: state === 'pending' });
+  return shell(title, `<section class="card"><div class="eyebrow">ACCESS REQUEST</div><h1>${title}</h1><p>${lead}</p><div class="notice">요청 계정: <strong>${html(user.email)}</strong><br>승인 전에는 교육 내용에 접근할 수 없습니다.</div>${action}<p><a href="/logout">다른 계정으로 로그인</a></p></section>`, { refresh: state === 'pending' });
 }
 
 function trainingPage(isOwner) {
   const adminLink = isOwner ? '<a class="nav-link" href="/admin"><span class="nav-icon">⚙</span> 직원 접속 승인 관리</a>' : '';
-  return embeddedAssets['index.html'].replace('</nav>', `${adminLink}</nav>`);
+  return embeddedAssets['index.html'].replace('</nav>', `${adminLink}<a class="nav-link" href="/logout"><span class="nav-icon">↪</span> 로그아웃</a></nav>`);
 }
 
 async function allRecords(bucket) {
@@ -92,14 +172,17 @@ async function adminPage(bucket) {
   const approved = records.filter(row => row.status === 'approved');
   const rejected = records.filter(row => row.status === 'rejected');
   const item = row => `<div class="row"><div><strong>${html(row.email)}</strong><small>요청: ${html(row.requestedAt ? new Date(row.requestedAt).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul' }) : '')}</small></div><div class="actions">${row.status === 'pending' || row.status === 'rejected' ? `<form method="post" action="/api/admin/status"><input type="hidden" name="id" value="${html(row.id)}"><input type="hidden" name="status" value="approved"><button type="submit">승인</button></form>` : ''}${row.status === 'pending' ? `<form method="post" action="/api/admin/status"><input type="hidden" name="id" value="${html(row.id)}"><input type="hidden" name="status" value="rejected"><button type="submit" class="secondary">거절</button></form>` : ''}${row.status === 'approved' ? `<form method="post" action="/api/admin/status"><input type="hidden" name="id" value="${html(row.id)}"><input type="hidden" name="status" value="rejected"><button type="submit" class="danger">접속 취소</button></form>` : ''}</div></div>`;
-  return shell('직원 접속 승인 관리', `<div class="grid"><section class="card"><div class="eyebrow">OWNER CONTROL</div><h1>직원 접속 승인 관리</h1><p>직원은 공유 링크에서 본인 계정으로 로그인하고 승인 요청을 보냅니다. 여기에서 승인하면 같은 계정으로 교육 사이트에 접속할 수 있습니다.</p><a class="button secondary" href="/">교육 사이트 열기 ↗</a><div class="notice">공유 링크: <a href="/">${html('https://yoohastree-franchise-training.earthyeagle4.chatgpt.site/')}</a><br>승인 계정: ${OWNER_EMAIL}</div></section><section class="card"><h2>승인 대기 <span class="count">${pending.length}</span></h2>${pending.length ? pending.map(item).join('') : '<p class="muted">현재 대기 중인 요청이 없습니다.</p>'}</section><section class="card"><h2>승인된 직원 <span class="count">${approved.length}</span></h2>${approved.length ? approved.map(item).join('') : '<p class="muted">아직 승인된 직원이 없습니다.</p>'}</section>${rejected.length ? `<section class="card"><h2>거절·취소된 요청 <span class="count">${rejected.length}</span></h2>${rejected.map(item).join('')}</section>` : ''}</div>`);
+  return shell('직원 접속 승인 관리', `<div class="grid"><section class="card"><div class="eyebrow">OWNER CONTROL</div><h1>직원 접속 승인 관리</h1><p>직원은 공유 링크에서 본인 계정으로 로그인하고 승인 요청을 보냅니다. 여기에서 승인하면 같은 계정으로 교육 사이트에 접속할 수 있습니다.</p><div class="actions"><a class="button secondary" href="/">교육 사이트 열기 ↗</a><a class="button secondary" href="/logout">로그아웃</a></div><div class="notice">공유 링크: <a href="/">${html('https://yoohastree-franchise-training.earthyeagle4.chatgpt.site/')}</a><br>승인 계정: ${OWNER_EMAIL}</div></section><section class="card"><h2>승인 대기 <span class="count">${pending.length}</span></h2>${pending.length ? pending.map(item).join('') : '<p class="muted">현재 대기 중인 요청이 없습니다.</p>'}</section><section class="card"><h2>승인된 직원 <span class="count">${approved.length}</span></h2>${approved.length ? approved.map(item).join('') : '<p class="muted">아직 승인된 직원이 없습니다.</p>'}</section>${rejected.length ? `<section class="card"><h2>거절·취소된 요청 <span class="count">${rejected.length}</span></h2>${rejected.map(item).join('')}</section>` : ''}</div>`);
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     const path = url.pathname;
-    const user = identity(request);
+    if (path === '/logout') return signOutPage(env);
+    const auth = await authenticate(request, env);
+    if (auth.response) return auth.response;
+    const user = auth.user;
     const bucket = env.BUCKET;
     if (!bucket) return response('Approval storage is unavailable', 503, 'text/plain; charset=utf-8');
 
@@ -108,7 +191,7 @@ export default {
       if (path === '/api/request') {
         if (!user) return response('Sign in required', 401, 'text/plain; charset=utf-8');
         if (user.isOwner) return redirect('/admin');
-        const existing = await recordFor(bucket, user.id);
+        const existing = await recordForUser(bucket, user);
         if (existing?.status !== 'approved' && existing?.status !== 'pending') {
           await saveRecord(bucket, { id: user.id, email: user.email, status: 'pending', requestedAt: new Date().toISOString(), approvedAt: null });
         }
@@ -130,15 +213,16 @@ export default {
 
     if (request.method !== 'GET' && request.method !== 'HEAD') return response('Method not allowed', 405, 'text/plain; charset=utf-8');
     if (path === '/admin') {
-      if (!user) return response(signInPage('/admin'));
+      if (!user) return response(signInPage('/admin', env));
       if (!user.isOwner) return response('Forbidden', 403, 'text/plain; charset=utf-8');
       return response(await adminPage(bucket));
     }
 
-    const approved = user?.isOwner || (user && (await recordFor(bucket, user.id))?.status === 'approved');
+    const record = user && !user.isOwner ? await recordForUser(bucket, user) : null;
+    const approved = user?.isOwner || record?.status === 'approved';
     if (path === '/' || path === '/index.html') {
-      if (!user) return response(signInPage('/'));
-      if (!approved) return response(requestPage(user, await recordFor(bucket, user.id)));
+      if (!user) return response(signInPage('/', env));
+      if (!approved) return response(requestPage(user, record));
       return response(trainingPage(user.isOwner));
     }
     const assetName = path.slice(1);
