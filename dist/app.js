@@ -15,10 +15,10 @@ const escapeHTML = value => String(value).replace(/[&<>"']/g, character => ({'&'
 const progress = () => Math.round(completed.size / allLessons.length * 100);
 const formatCount = number => String(number).padStart(2,'0');
 const saveProgress = () => { try { localStorage.setItem(progressKey, JSON.stringify([...completed])); } catch {} };
-const courseMatches = course => `${course.title} ${course.objective} ${course.topics.map(topic => `${topic.title} ${topic.detail}`).join(' ')} ${course.forms.join(' ')}`.toLowerCase().includes(query.toLowerCase());
+const courseMatches = course => `${course.title} ${course.objective} ${course.topics.map(topic => `${topic.title} ${topic.detail}`).join(' ')} ${course.forms.join(' ')} ${lessonContent[course.number]?.teaching.join(' ') || ''}`.toLowerCase().includes(query.toLowerCase());
 
 function lessonCard(course){
-  return `<button class="lesson-row" data-lesson="${course.id}"><span class="lesson-check ${completed.has(course.id)?'done':''}">${completed.has(course.id)?'✓':'○'}</span><span class="course-number">${formatCount(course.number)}</span><span class="lesson-row-copy"><strong>${escapeHTML(course.title)}</strong><small>${escapeHTML(course.objective)}</small></span><span class="lesson-time">${course.topics.length}개 학습 항목</span><span class="row-arrow">↗</span></button>`;
+  return `<button class="lesson-row" data-lesson="${course.id}"><span class="lesson-check ${completed.has(course.id)?'done':''}">${completed.has(course.id)?'✓':'○'}</span><span class="course-number">${formatCount(course.number)}</span><span class="lesson-row-copy"><strong>${escapeHTML(course.title)}</strong><small>${escapeHTML(course.objective)}</small></span><span class="lesson-time">60분 교육안</span><span class="row-arrow">↗</span></button>`;
 }
 
 function renderHome(){
@@ -42,7 +42,7 @@ function renderModuleList(){
 }
 
 function renderSupervisor(){
-  app.innerHTML = `<div class="page curriculum-page"><div class="page-head"><div class="eyebrow">TRACK 01 · SUPERVISING</div><h1>슈퍼바이징 직무 교육</h1><p>점포 현장을 진단하고 개선을 실행하는 24개 실무 과정입니다. 각 과정에서 목표, 세부 교육 내용, 실습과 활용 양식을 확인하세요.</p><div class="head-meta"><span>▦ ${modules.length}개 대분류</span><span>◈ ${allLessons.length}개 과정</span><span>✳ 과정별 실습·양식 포함</span></div></div>
+  app.innerHTML = `<div class="page curriculum-page"><div class="page-head"><div class="eyebrow">TRACK 01 · SUPERVISING</div><h1>슈퍼바이징 직무 교육</h1><p>점포 현장을 진단하고 개선을 실행하는 24개 실무 과정입니다. 각 과정은 60분 교육안, 현장 사례, 실습과 이해도 확인으로 구성됩니다.</p><div class="head-meta"><span>▦ ${modules.length}개 대분류</span><span>◈ ${allLessons.length}개 과정</span><span>◷ 과정별 60분</span></div></div>
     <div class="curriculum-toolbar"><div class="section-heading"><div><div class="eyebrow">COURSE OVERVIEW</div><h2>SV 커리큘럼</h2></div><span>${completed.size} / ${allLessons.length} 과정 완료</span></div><div class="toolbar-row"><div class="filter-scroll"><button class="filter-chip ${filter==='all'?'selected':''}" data-filter="all">전체</button>${modules.map(module => `<button class="filter-chip ${filter===module.id?'selected':''}" data-filter="${module.id}">${module.number} ${module.name}</button>`).join('')}</div><label class="search-box"><span>⌕</span><input id="searchLessons" type="search" placeholder="과정·교육 항목 검색" value="${escapeHTML(query)}" aria-label="과정 검색"></label></div></div>
     <div class="module-list" id="moduleList"></div></div>`;
   renderModuleList();
@@ -63,9 +63,22 @@ function renderUpcoming(id){
 function openLesson(id){
   const course = allLessons.find(item => item.id === id);
   if(!course) return;
+  const content = lessonContent[course.number];
+  if(!content) return;
   currentLesson = course;
   document.getElementById('lessonModule').textContent = `SV 과정 ${formatCount(course.number)} · ${course.module.name}`;
-  document.getElementById('lessonBody').innerHTML = `<span class="lesson-duration">SV COURSE ${formatCount(course.number)} · ${course.topics.length}개 교육 항목</span><h2 id="lessonTitle">${escapeHTML(course.title)}</h2><div class="objective-box"><span>교육 목표</span><p>${escapeHTML(course.objective)}</p></div><div class="lesson-divider"></div><h3><span>01</span> 세부 교육 내용</h3><div class="learning-points">${course.topics.map((topic,index) => `<div class="learning-point"><span>${formatCount(index+1)}</span><div><strong>${escapeHTML(topic.title)}</strong><p>${escapeHTML(topic.detail)}</p></div></div>`).join('')}</div><div class="practice-box"><div class="practice-heading"><span>✳</span><strong>실습</strong></div><p>${escapeHTML(course.practice)}</p>${course.number === 1 ? '<a class="simulation-inline" href="https://qsc-field-simulator-20261022.earthyeagle4.chatgpt.site/" target="_blank" rel="noopener noreferrer">QSC 모의 점검 시뮬레이션 열기 ↗</a>' : ''}</div><div class="forms-section"><h3><span>02</span> 활용 양식</h3><div class="form-list">${course.forms.map(form => `<span>${escapeHTML(form)}</span>`).join('')}</div></div>${course.note ? `<p class="course-note">※ ${escapeHTML(course.note)}</p>` : ''}<p class="lesson-disclaimer">실무에 적용할 때는 해당 브랜드의 최신 운영 매뉴얼과 정책을 확인하세요.</p>`;
+  document.getElementById('lessonBody').innerHTML = `
+    <span class="lesson-duration">SV COURSE ${formatCount(course.number)} · 60분 교육안</span>
+    <h2 id="lessonTitle">${escapeHTML(course.title)}</h2>
+    <div class="objective-box"><span>교육 목표</span><p>${escapeHTML(course.objective)}</p></div>
+    <div class="lesson-agenda" aria-label="60분 진행 순서"><div><strong>05분</strong><span>사례·목표</span></div><div><strong>36분</strong><span>핵심 학습 6항목</span></div><div><strong>14분</strong><span>현장 실습</span></div><div><strong>05분</strong><span>이해도 확인</span></div></div>
+    <section class="case-box"><h3><span>01</span> 시작 사례</h3><p>${escapeHTML(content.scenario)}</p><small>이 사례에서 무엇을 먼저 확인할지 생각한 뒤 교육 내용을 읽어보세요.</small></section>
+    <div class="lesson-divider"></div><h3><span>02</span> 핵심 교육 내용 <small>각 항목 6분 · 설명 4분 + 토의 2분</small></h3>
+    <div class="learning-points">${course.topics.map((topic,index) => `<div class="learning-point"><span>${formatCount(index+1)}</span><div><strong>${escapeHTML(topic.title)}</strong><p class="topic-outline">${escapeHTML(topic.detail)}</p><p class="teaching-copy">${escapeHTML(content.teaching[index])}</p><div class="discussion-prompt"><b>현장 토의</b> ${escapeHTML(lessonPrompts[course.number][index])}</div></div></div>`).join('')}</div>
+    <div class="practice-box"><div class="practice-heading"><span>✳</span><strong>현장 실습 · 14분</strong></div><p>${escapeHTML(course.practice)}</p><ol class="practice-steps">${content.task.map(step => `<li>${escapeHTML(step)}</li>`).join('')}</ol>${course.number === 1 ? '<a class="simulation-inline" href="https://qsc-field-simulator-20261022.earthyeagle4.chatgpt.site/" target="_blank" rel="noopener noreferrer">QSC 모의 점검 시뮬레이션 열기 ↗</a>' : ''}</div>
+    <section class="knowledge-check"><h3><span>03</span> 이해도 확인 · 5분</h3>${content.check.map(([question,answer]) => `<details><summary>${escapeHTML(question)}</summary><p>${escapeHTML(answer)}</p></details>`).join('')}</section>
+    <div class="forms-section"><h3><span>04</span> 실무 활용 양식</h3><div class="form-list">${course.forms.map(form => `<span>${escapeHTML(form)}</span>`).join('')}</div></div>
+    ${course.note ? `<p class="course-note">※ ${escapeHTML(course.note)}</p>` : ''}<p class="lesson-disclaimer">이 교육안은 공통 실무 예시입니다. 실제 적용 기준·승인 권한·수치는 해당 브랜드의 최신 운영 매뉴얼과 정책을 확인하세요.</p>`;
   document.getElementById('completeLesson').innerHTML = completed.has(id) ? '학습 완료 취소 <span>↗</span>' : '학습 완료로 표시 <span>↗</span>';
   dialog.showModal();
 }
