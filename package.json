@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "build": "node scripts/build-worker.mjs",
+    "build:vercel": "node scripts/build-vercel-preview.mjs",
     "test": "node scripts/test-worker.mjs"
   },
   "dependencies": {
